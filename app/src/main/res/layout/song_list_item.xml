@@ -73,7 +73,7 @@
         app:layout_constraintDimensionRatio="1:1"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        tools:srcCompat="@drawable/legends_preview" />
+        tools:srcCompat="@drawable/generic_cover" />
 
     <ImageButton
         android:id="@+id/imageButton2"

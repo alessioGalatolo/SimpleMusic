@@ -27,6 +27,9 @@ import java.io.File
 import java.nio.file.Files
 import android.content.DialogInterface
 import android.R.string.ok
+import android.content.ContentResolver
+import android.database.Cursor
+import android.net.Uri
 import android.widget.Toast
 
 
@@ -34,36 +37,78 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
 
     lateinit var adapter: SongsAdapter
 
-    fun findSongs(root: File, context: Context): ArrayList<Song> {
+    fun requestPermission(context: Context){
         // 1. Instantiate an AlertDialog.Builder with its constructor
         val builder = AlertDialog.Builder(context)
-        var a1: ArrayList<Song> = ArrayList()
-        // 2. Chain together various setter methods to set the dialog characteristics
+//         2. Chain together various setter methods to set the dialog characteristics
         builder.setMessage(R.string.dialog_message)
                 .setTitle(R.string.dialog_title)
         builder.setPositiveButton(R.string.ok, DialogInterface.OnClickListener { dialog, id ->
             ActivityCompat.requestPermissions(this,
                     arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE),
                     0)
-            a1 = findSongs(root, context)
-        })
+            requestPermission(context)
+          })
         if (ContextCompat.checkSelfPermission(context,
                         Manifest.permission.READ_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED) {
             val dialog = builder.create()
             dialog.show()
-            return a1
         }
-        else {
-            val files: Array<File> = root.listFiles()
-            for (singleFile in files) {
-                if (singleFile.isDirectory)
-                    a1.addAll(findSongs(singleFile, context))
-                else if (singleFile.endsWith(".mp3")) {
-                    a1.add(Song(singleFile.toString(), null, "", 0, singleFile.toURI()))
-                }
+    }
+
+    fun retriveMusic(): ArrayList<Song>{
+        val a1: ArrayList<Song> = ArrayList()
+        val contentResolver: ContentResolver = getContentResolver()
+        val uri= android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+        val cursor = contentResolver.query(uri, null, null, null, null);
+        if (cursor == null) {
+            // query failed, handle error.
+        } else if (!cursor.moveToFirst()) {
+            // no media on the device
+
+        } else {
+            val titleColumn: Int = cursor.getColumnIndex(android.provider.MediaStore.Audio.Media.TITLE)
+            val idColumn: Int = cursor.getColumnIndex(android.provider.MediaStore.Audio.Media._ID)
+            do {
+                val thisId = cursor.getLong(idColumn);
+                val thisTitle = cursor.getString(titleColumn);
+                a1.add(Song(thisTitle, null, "", 0, thisId))
+                // ...process entry...
+            } while (cursor.moveToNext())
+        }
+        return a1
+    }
+
+    fun inverti(a: ArrayList<Song>, i: Int, j: Int): Int{
+        val tmp = a[i + 1]
+        a[i + 1] = a[j]
+        a[j] = tmp
+        return i + 1
+    }
+
+    fun distribution(a: ArrayList<Song>, sx: Int, dx: Int, orderBy: String): Int {
+        val px = dx
+        var i: Int = sx - 1
+        var j: Int = sx
+        for (j in sx..dx){
+            when(orderBy){
+                "title" -> if(a[j].title < a[px].title) i = inverti(a, i, j)
+                "artist" ->if(a[j].artist < a[px].artist) i = inverti(a, i, j)
+                "length" ->if(a[j].length < a[px].length) i = inverti(a, i, j)
             }
-            return a1
+        }
+        val tmp = a[i + 1]
+        a[i + 1] = a[px]
+        a[px] = tmp
+        return i + 1
+    }
+
+    fun myQuickSort(a: ArrayList<Song>, sx: Int, dx: Int, orderBy: String): Unit{
+        if(sx < dx){
+            val px = distribution(a, sx, dx, orderBy)
+            myQuickSort(a, sx, px - 1, orderBy)
+            myQuickSort(a, px + 1, dx, orderBy)
         }
     }
 
@@ -71,10 +116,11 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         setSupportActionBar(toolbar)
-
+        requestPermission(this)
 //        val mySongs: ArrayList<Song> = findSongs(Environment.getExternalStorageDirectory(), this)
+        val songs = retriveMusic()
 
-        val bitmap = BitmapFactory.decodeResource(resources, R.drawable.legends_preview )  //creating bitmap to make image round
+        val bitmap = BitmapFactory.decodeResource(resources, R.drawable.generic_cover )  //creating bitmap to make image round
         val rounded = RoundedBitmapDrawableFactory.create(resources, bitmap)
         rounded.isCircular = true
         songImageFront.setImageDrawable(rounded)
@@ -85,6 +131,17 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
         toggle.syncState()
 
         nav_view.setNavigationItemSelectedListener(this)
+
+        myQuickSort(songs, 0, songs.size - 1, "title")
+        adapter = SongsAdapter(this, songs) {
+            song ->
+            songTitleFront.text = song.title
+            songArtistFront.text = song.artist
+        }    //setting the adapter of recylcerView and the song click
+        songsListView.adapter = adapter                             //assigning the adapter
+        val layoutManager =  LinearLayoutManager(this)       //layout manager
+        songsListView.layoutManager = layoutManager
+        songsListView.setHasFixedSize(true)
 
 
 //        adapter = SongsAdapter(this, SongsData.songsList) {
